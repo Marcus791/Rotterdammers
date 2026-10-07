@@ -17,6 +17,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $values = recipe_input();
     $error = handle_recipe_post($values, 'admin.php');
+} elseif (get('edit') !== '') {
+    $values = find_recipe((int) get('edit')) ?? [];
 }
 
 $recipes = query('SELECT r.*, t.naam AS thema FROM recepten r JOIN themas t ON t.id = r.thema_id ORDER BY r.id DESC')->fetchAll();
@@ -58,7 +60,7 @@ require __DIR__ . '/includes/header.php';
                     </div>
                 </div>
                 <?php foreach ($recipes as $recipe): ?>
-                    <?php $showEdit = true; require __DIR__ . '/includes/manage-card.php'; ?>
+                    <?php require __DIR__ . '/includes/manage-card.php'; ?>
                 <?php endforeach ?>
             </section>
         </div>

@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         query('INSERT INTO gebruikers (gebruikersnaam, wachtwoord_hash) VALUES (?, ?)', [$username, password_hash($password, PASSWORD_DEFAULT)]);
         login_user(find_user($username));
-        redirect('profiel.php');
+        redirect_after_login('recepten.php');
     }
 }
 
@@ -33,7 +33,7 @@ require __DIR__ . '/includes/header.php';
         <div class="auth-panel">
             <p class="kicker">Nieuw account</p>
             <h1>Registreren</h1>
-            <p>Maak een account om zelf recepten te plaatsen.</p>
+            <p>Maak een account om recepten te bestellen.</p>
             <form method="post">
                 <?= csrf_field() ?>
                 <label for="gebruikersnaam">Gebruikersnaam</label>

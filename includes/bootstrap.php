@@ -109,11 +109,22 @@ function login_user(array $user): void
     $_SESSION['user'] = ['id' => (int) $user['id'], 'gebruikersnaam' => $user['gebruikersnaam'], 'rol' => $user['rol']];
 }
 
-function require_login(): void
+function require_login(string $reason = 'Log in om verder te gaan.'): void
 {
     if (!current_user()) {
+        // Onthoud deze pagina, zodat je na het inloggen hier terugkomt.
+        $page = basename($_SERVER['SCRIPT_NAME']);
+        $query = $_SERVER['QUERY_STRING'] ?? '';
+        $_SESSION['na_login'] = ['url' => $query !== '' ? "$page?$query" : $page, 'reden' => $reason];
         redirect('login.php');
     }
+}
+
+function redirect_after_login(string $default): never
+{
+    $url = $_SESSION['na_login']['url'] ?? $default;
+    unset($_SESSION['na_login']);
+    redirect($url);
 }
 
 function require_admin(): void
@@ -121,12 +132,6 @@ function require_admin(): void
     if (!is_admin()) {
         redirect('admin-login.php');
     }
-}
-
-function can_manage(array $recipe): bool
-{
-    $user = current_user();
-    return $user && ($user['rol'] === 'admin' || (int) $recipe['gebruiker_id'] === $user['id']);
 }
 
 function csrf_field(): string
@@ -174,12 +179,14 @@ function validate_recipe(array $r): ?string
 
 function handle_recipe_post(array $input, string $back): string
 {
+    // Alleen een admin mag recepten toevoegen, aanpassen of verwijderen.
+    require_admin();
     check_csrf();
     $existing = $input['id'] ? find_recipe($input['id']) : null;
 
-    if ($input['id'] && (!$existing || !can_manage($existing))) {
-        http_response_code(403);
-        exit('Je mag dit recept niet aanpassen.');
+    if ($input['id'] && !$existing) {
+        http_response_code(404);
+        exit('Dit recept bestaat niet.');
     }
 
     if ($input['action'] === 'delete' && $existing) {

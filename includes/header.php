@@ -22,7 +22,6 @@ $user = current_user();
                 <a href="weekmenu.php">Weekmenu</a>
                 <a href="bestellen.php">Bestellen</a>
                 <?php if ($user): ?>
-                    <a href="profiel.php">Mijn recepten</a>
                     <?php if (is_admin()): ?>
                         <a class="admin-nav" href="admin.php">Admin</a>
                     <?php endif ?>

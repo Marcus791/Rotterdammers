@@ -37,6 +37,6 @@ $editing = !empty($values['id']);
     <p class="form-message"><?= e($error) ?></p>
     <button type="submit"><?= e($editing ? 'Wijzigingen opslaan' : $buttonText) ?></button>
     <?php if ($editing): ?>
-        <a class="text-link" href="profiel.php">Annuleren</a>
+        <a class="text-link" href="admin.php">Annuleren</a>
     <?php endif ?>
 </form>

@@ -3,6 +3,7 @@ require __DIR__ . '/includes/bootstrap.php';
 
 $error = '';
 $username = '';
+$notice = $_SESSION['na_login']['reden'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     check_csrf();
@@ -11,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($user && password_verify(post('wachtwoord', false), $user['wachtwoord_hash'])) {
         login_user($user);
-        redirect($user['rol'] === 'admin' ? 'admin.php' : 'profiel.php');
+        redirect_after_login($user['rol'] === 'admin' ? 'admin.php' : 'recepten.php');
     }
     $error = 'Gebruikersnaam of wachtwoord klopt niet.';
 }
@@ -25,7 +26,10 @@ require __DIR__ . '/includes/header.php';
         <div class="auth-panel">
             <p class="kicker">Welkom terug</p>
             <h1>Inloggen</h1>
-            <p>Log in om recepten te plaatsen en te beheren.</p>
+            <p>Log in om recepten te bestellen.</p>
+            <?php if ($notice): ?>
+                <p class="auth-notice"><?= e($notice) ?></p>
+            <?php endif ?>
             <form method="post">
                 <?= csrf_field() ?>
                 <label for="gebruikersnaam">Gebruikersnaam</label>

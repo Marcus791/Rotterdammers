@@ -5,9 +5,7 @@
         <span><?= e($recipe['thema']) ?> · <?= (int) $recipe['tijd'] ?> min · <?= format_price($recipe['prijs']) ?></span>
     </div>
     <div class="manage-actions">
-        <?php if ($showEdit): ?>
-            <a class="button" href="profiel.php?edit=<?= (int) $recipe['id'] ?>">Aanpassen</a>
-        <?php endif ?>
+        <a class="button" href="admin.php?edit=<?= (int) $recipe['id'] ?>">Aanpassen</a>
         <form method="post">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="delete">

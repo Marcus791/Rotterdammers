@@ -559,6 +559,13 @@ footer {
     color: var(--muted)
 }
 
+.auth-panel>p.auth-notice {
+    padding: 12px 14px;
+    border-left: 4px solid var(--primary);
+    background: var(--tint);
+    color: var(--text)
+}
+
 .auth-panel label {
     margin-top: 16px
 }
