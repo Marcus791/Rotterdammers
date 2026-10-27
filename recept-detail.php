@@ -22,7 +22,7 @@ if (!$recipe) {
     exit;
 }
 
-$steps = query('SELECT * FROM stappen WHERE recept_id = ? ORDER BY volgorde', [$recipe['id']])->fetchAll();
+$steps = recipe_steps($recipe['id']);
 
 $title = $recipe['naam'];
 require __DIR__ . '/includes/header.php';
@@ -38,7 +38,7 @@ require __DIR__ . '/includes/header.php';
             <?php endif ?>
             <div class="article-meta">
                 <span><b><?= (int) $recipe['tijd'] ?></b> minuten</span>
-                <span><b><?= format_price($recipe['prijs']) ?></b> totaal</span>
+                <span><b><?= format_price($recipe['prijs']) ?></b> per persoon</span>
                 <?php if ($recipe['personen']): ?>
                     <span><b><?= (int) $recipe['personen'] ?></b> personen</span>
                 <?php endif ?>
@@ -58,9 +58,9 @@ require __DIR__ . '/includes/header.php';
             </section>
 
             <?php foreach ($steps as $i => $step): ?>
-                <section class="story-step<?= $i % 2 ? ' reverse' : '' ?>">
+                <section class="story-step<?= $i % 2 ? ' reverse' : '' ?><?= $step['foto'] ? '' : ' no-photo' ?>">
                     <div>
-                        <span>STAP <?= (int) $step['volgorde'] ?></span>
+                        <span>STAP <?= $i + 1 ?></span>
                         <h2><?= e($step['titel']) ?></h2>
                         <p><?= e($step['tekst']) ?></p>
                     </div>

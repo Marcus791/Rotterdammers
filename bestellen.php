@@ -60,19 +60,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $values['plaats']
         );
 
+        // De receptprijs is per persoon.
+        $amount = round($recipe['prijs'] * (int) $values['personen'], 2);
+
         db()->beginTransaction();
         query('INSERT INTO contact (naam, telefoonnummer, adres) VALUES (?, ?, ?)', [$values['naam'], $phone, $address]);
-        query('INSERT INTO orders (thema_id, recept_id, contact_id, personen) VALUES (?, ?, ?, ?)', [
-            $recipe['thema_id'], $recipe['id'], db()->lastInsertId(), (int) $values['personen'],
+        query('INSERT INTO orders (thema_id, recept_id, contact_id, personen, gebruiker_id, bedrag) VALUES (?, ?, ?, ?, ?, ?)', [
+            $recipe['thema_id'], $recipe['id'], db()->lastInsertId(), (int) $values['personen'], current_user()['id'], $amount,
         ]);
+        $orderId = db()->lastInsertId();
         db()->commit();
-        redirect('bestellen.php?besteld=' . $recipe['id']);
+        redirect('betalen.php?order=' . $orderId);
     }
 }
 
-$ordered = get('besteld') !== '' ? find_recipe((int) get('besteld')) : null;
-$selected = $ordered ?? find_recipe((int) $values['recept_id']);
-$recipes = query('SELECT id, naam FROM recepten ORDER BY naam')->fetchAll();
+// Na het betalen komt de klant hier terug met ?order=...
+$order = get('order') !== '' ? find_own_order((int) get('order')) : null;
+$selected = find_recipe((int) ($order['recept_id'] ?? $values['recept_id']));
+$recipes = query('SELECT id, naam, prijs FROM recepten ORDER BY naam')->fetchAll();
 
 $title = 'Bestellen';
 require __DIR__ . '/includes/header.php';
@@ -88,11 +93,21 @@ require __DIR__ . '/includes/header.php';
 
     <section class="section">
         <div class="wrap account-grid">
-            <?php if ($ordered): ?>
+            <?php if ($order): ?>
                 <div class="editor">
-                    <h2>Bedankt voor je bestelling!</h2>
-                    <p>We hebben je bestelling voor <strong><?= e($ordered['naam']) ?></strong> ontvangen. We nemen telefonisch contact met je op.</p>
-                    <a class="button" href="recepten.php">Terug naar recepten</a>
+                    <p class="status-badge <?= e($order['status']) ?>"><?= e(payment_status($order['status'])) ?></p>
+                    <?php if ($order['status'] === 'betaald'): ?>
+                        <h2>Bedankt voor je bestelling!</h2>
+                        <p>Je betaling van <strong><?= format_price($order['bedrag']) ?></strong> via <?= e($order['bank']) ?> is gelukt.
+                            We bezorgen het maaltijdpakket voor <strong><?= e($order['recept'] ?? 'je recept') ?></strong> (<?= (int) $order['personen'] ?> personen) bij je thuis.</p>
+                        <a class="button" href="recepten.php">Terug naar recepten</a>
+                    <?php else: ?>
+                        <h2><?= $order['status'] === 'open' ? 'Je bestelling is nog niet betaald' : e(payment_status($order['status'])) ?></h2>
+                        <p>Je bestelling voor <strong><?= e($order['recept'] ?? 'je recept') ?></strong> (<?= (int) $order['personen'] ?> personen) staat klaar.
+                            Er is niets afgeschreven. Betaal <strong><?= format_price($order['bedrag']) ?></strong> om de bestelling af te ronden.</p>
+                        <a class="button" href="betalen.php?order=<?= (int) $order['id'] ?>"><?= $order['status'] === 'open' ? 'Nu betalen' : 'Opnieuw betalen' ?></a>
+                    <?php endif ?>
+                    <p class="order-number">Bestelnummer #<?= (int) $order['id'] ?></p>
                 </div>
             <?php else: ?>
                 <form method="post" class="editor">
@@ -105,7 +120,7 @@ require __DIR__ . '/includes/header.php';
                             <select id="recept_id" name="recept_id" required>
                                 <option value="">Kies een recept</option>
                                 <?php foreach ($recipes as $recipe): ?>
-                                    <option value="<?= $recipe['id'] ?>" <?= (int) $values['recept_id'] === (int) $recipe['id'] ? 'selected' : '' ?>><?= e($recipe['naam']) ?></option>
+                                    <option value="<?= $recipe['id'] ?>" data-prijs="<?= e($recipe['prijs']) ?>" <?= (int) $values['recept_id'] === (int) $recipe['id'] ? 'selected' : '' ?>><?= e($recipe['naam']) ?></option>
                                 <?php endforeach ?>
                             </select>
                         </div>
@@ -150,9 +165,30 @@ require __DIR__ . '/includes/header.php';
                         </div>
                     </div>
 
+                    <p class="order-total" id="order-total"></p>
                     <p class="form-message"><?= e($error) ?></p>
-                    <button type="submit">Bestelling plaatsen</button>
+                    <button type="submit">Verder naar betalen</button>
                 </form>
+                <script>
+                    (() => {
+                        const recipe = document.getElementById('recept_id');
+                        const persons = document.getElementById('personen');
+                        const total = document.getElementById('order-total');
+                        const euro = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' });
+
+                        function update() {
+                            const price = parseFloat(recipe.selectedOptions[0]?.dataset.prijs);
+                            const count = parseInt(persons.value, 10);
+                            total.textContent = price >= 0 && count > 0
+                                ? `Te betalen: ${euro.format(price * count)} (${euro.format(price)} × ${count} personen)`
+                                : '';
+                        }
+
+                        recipe.addEventListener('change', update);
+                        persons.addEventListener('input', update);
+                        update();
+                    })();
+                </script>
             <?php endif ?>
 
             <section>

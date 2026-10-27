@@ -1,17 +1,40 @@
 <?php
 
+// Verhoog dit getal als de database verandert, en voeg een stap toe in setup_database().
+const DB_VERSION = 2;
+
 function setup_database(PDO $pdo): void
 {
-    if ((int) $pdo->query('PRAGMA user_version')->fetchColumn() >= 1) {
+    if ((int) $pdo->query('PRAGMA user_version')->fetchColumn() >= DB_VERSION) {
         return;
     }
 
     $pdo->exec('BEGIN IMMEDIATE');
-    if ((int) $pdo->query('PRAGMA user_version')->fetchColumn() >= 1) {
-        $pdo->exec('COMMIT');
-        return;
+    $version = (int) $pdo->query('PRAGMA user_version')->fetchColumn();
+    if ($version < 1) {
+        create_database($pdo);
+    } elseif ($version < 2) {
+        add_payments($pdo);
     }
+    $pdo->exec('PRAGMA user_version = ' . DB_VERSION);
+    $pdo->exec('COMMIT');
+}
 
+// Versie 2: bestellingen hebben een bedrag, een betaalstatus en horen bij een gebruiker.
+function add_payments(PDO $pdo): void
+{
+    $pdo->exec("
+        ALTER TABLE orders ADD COLUMN gebruiker_id INTEGER REFERENCES gebruikers(id) ON DELETE SET NULL;
+        ALTER TABLE orders ADD COLUMN bedrag REAL;
+        ALTER TABLE orders ADD COLUMN status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'betaald', 'mislukt', 'geannuleerd'));
+        ALTER TABLE orders ADD COLUMN bank TEXT;
+        ALTER TABLE orders ADD COLUMN betaald_op TEXT;
+        UPDATE orders SET bedrag = ROUND((SELECT prijs FROM recepten WHERE id = orders.recept_id) * personen, 2);
+    ");
+}
+
+function create_database(PDO $pdo): void
+{
     $pdo->exec("
         CREATE TABLE gebruikers (
             id              INTEGER PRIMARY KEY,
@@ -68,7 +91,12 @@ function setup_database(PDO $pdo): void
             recept_id  INTEGER REFERENCES recepten(id) ON DELETE SET NULL,
             contact_id INTEGER NOT NULL REFERENCES contact(id),
             personen   INTEGER NOT NULL CHECK (personen > 0),
-            besteld_op TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            besteld_op TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            gebruiker_id INTEGER REFERENCES gebruikers(id) ON DELETE SET NULL,
+            bedrag     REAL,
+            status     TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'betaald', 'mislukt', 'geannuleerd')),
+            bank       TEXT,
+            betaald_op TEXT
         );
     ");
 
@@ -108,7 +136,4 @@ function setup_database(PDO $pdo): void
     foreach ($steps as [$volgorde, $titel, $tekst, $foto]) {
         $stmt->execute([$volgorde, $titel, $tekst, pexels($foto, 1000)]);
     }
-
-    $pdo->exec('PRAGMA user_version = 1');
-    $pdo->exec('COMMIT');
 }

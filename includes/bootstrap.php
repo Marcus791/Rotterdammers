@@ -46,6 +46,30 @@ function find_recipe(int $id): ?array
     )->fetch() ?: null;
 }
 
+// Alleen bestellingen van de ingelogde gebruiker, zodat niemand andermans bestelling kan zien of betalen.
+function find_own_order(int $id): ?array
+{
+    return query(
+        'SELECT o.*, r.naam AS recept FROM orders o LEFT JOIN recepten r ON r.id = o.recept_id WHERE o.id = ? AND o.gebruiker_id = ?',
+        [$id, current_user()['id'] ?? 0]
+    )->fetch() ?: null;
+}
+
+function payment_status(string $status): string
+{
+    return [
+        'open' => 'Nog niet betaald',
+        'betaald' => 'Betaald',
+        'mislukt' => 'Betaling mislukt',
+        'geannuleerd' => 'Betaling geannuleerd',
+    ][$status] ?? $status;
+}
+
+function recipe_steps(int $recipeId): array
+{
+    return query('SELECT titel, tekst, foto FROM stappen WHERE recept_id = ? ORDER BY volgorde', [$recipeId])->fetchAll();
+}
+
 function all_themes(): array
 {
     return query('SELECT * FROM themas ORDER BY id')->fetchAll();
@@ -62,6 +86,15 @@ function post(string $key, bool $trim = true): string
 {
     $value = $_POST[$key] ?? '';
     return is_string($value) ? ($trim ? trim($value) : $value) : '';
+}
+
+function post_list(string $key): array
+{
+    $values = $_POST[$key] ?? [];
+    if (!is_array($values)) {
+        return [];
+    }
+    return array_map(fn($value) => is_string($value) ? trim($value) : '', array_values($values));
 }
 
 function get(string $key): string
@@ -161,7 +194,31 @@ function recipe_input(): array
         'tijd' => post('tijd'),
         'prijs' => str_replace(',', '.', post('prijs')),
         'foto' => post('foto'),
+        'stappen' => step_input(),
     ];
+}
+
+function step_input(): array
+{
+    $titles = post_list('stap_titel');
+    $texts = post_list('stap_tekst');
+    $photos = post_list('stap_foto');
+
+    $steps = [];
+    for ($i = 0; $i < max(count($titles), count($texts), count($photos)); $i++) {
+        $step = ['titel' => $titles[$i] ?? '', 'tekst' => $texts[$i] ?? '', 'foto' => $photos[$i] ?? ''];
+        // Helemaal lege stappen slaan we over.
+        if (implode('', $step) !== '') {
+            $steps[] = $step;
+        }
+    }
+    return $steps;
+}
+
+// Een lege foto mag ook, dan wordt er geen foto getoond.
+function valid_photo_url(string $url): bool
+{
+    return $url === '' || (filter_var($url, FILTER_VALIDATE_URL) && preg_match('#^https?://#i', $url));
 }
 
 function validate_recipe(array $r): ?string
@@ -171,8 +228,12 @@ function validate_recipe(array $r): ?string
     if (!query('SELECT 1 FROM themas WHERE id = ?', [$r['thema_id']])->fetch()) return 'Kies een geldige categorie.';
     if (!ctype_digit($r['tijd']) || (int) $r['tijd'] < 1) return 'Vul een geldige tijd in minuten in.';
     if (!is_numeric($r['prijs']) || (float) $r['prijs'] < 0) return 'Vul een geldige prijs in.';
-    if ($r['foto'] !== '' && (!filter_var($r['foto'], FILTER_VALIDATE_URL) || !preg_match('#^https?://#i', $r['foto']))) {
-        return 'De foto moet een geldige link zijn (https://...).';
+    if (!valid_photo_url($r['foto'])) return 'De foto moet een geldige link zijn (https://...).';
+    foreach ($r['stappen'] as $i => $step) {
+        $number = $i + 1;
+        if ($step['titel'] === '') return "Vul een titel in bij stap $number.";
+        if ($step['tekst'] === '') return "Vul de uitleg in bij stap $number.";
+        if (!valid_photo_url($step['foto'])) return "De foto bij stap $number moet een geldige link zijn (https://...).";
     }
     return null;
 }
@@ -208,10 +269,22 @@ function handle_recipe_post(array $input, string $back): string
         $input['foto'] ?: DEFAULT_IMAGE,
     ];
 
+    // Recept en stappen samen opslaan, zodat het nooit half lukt.
+    db()->beginTransaction();
     if ($existing) {
-        query('UPDATE recepten SET naam = ?, ingredienten = ?, thema_id = ?, tijd = ?, prijs = ?, foto = ? WHERE id = ?', [...$values, $existing['id']]);
+        $id = (int) $existing['id'];
+        query('UPDATE recepten SET naam = ?, ingredienten = ?, thema_id = ?, tijd = ?, prijs = ?, foto = ? WHERE id = ?', [...$values, $id]);
+        query('DELETE FROM stappen WHERE recept_id = ?', [$id]);
     } else {
         query('INSERT INTO recepten (naam, ingredienten, thema_id, tijd, prijs, foto, gebruiker_id) VALUES (?, ?, ?, ?, ?, ?, ?)', [...$values, current_user()['id']]);
+        $id = (int) db()->lastInsertId();
     }
+    foreach ($input['stappen'] as $i => $step) {
+        query(
+            'INSERT INTO stappen (recept_id, volgorde, titel, tekst, foto) VALUES (?, ?, ?, ?, ?)',
+            [$id, $i + 1, $step['titel'], $step['tekst'], $step['foto'] ?: null]
+        );
+    }
+    db()->commit();
     redirect($back);
 }

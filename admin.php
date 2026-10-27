@@ -19,12 +19,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $error = handle_recipe_post($values, 'admin.php');
 } elseif (get('edit') !== '') {
     $values = find_recipe((int) get('edit')) ?? [];
+    if ($values) {
+        $values['stappen'] = recipe_steps($values['id']);
+    }
 }
 
 $recipes = query('SELECT r.*, t.naam AS thema FROM recepten r JOIN themas t ON t.id = r.thema_id ORDER BY r.id DESC')->fetchAll();
 
 $orders = query('
-    SELECT o.id, o.personen, o.besteld_op, c.naam, c.telefoonnummer, c.adres,
+    SELECT o.id, o.personen, o.besteld_op, o.bedrag, o.status, o.bank, c.naam, c.telefoonnummer, c.adres,
            r.naam AS recept, r.foto, t.naam AS thema
     FROM orders o
     JOIN contact c ON c.id = o.contact_id
@@ -81,6 +84,10 @@ require __DIR__ . '/includes/header.php';
                         <strong><?= e($order['recept'] ?? '(recept verwijderd)') ?> · <?= (int) $order['personen'] ?> personen</strong>
                         <span><?= e($order['naam']) ?> · <?= e($order['telefoonnummer']) ?> · <?= e($order['adres']) ?></span>
                         <span><?= e($order['thema'] ?? '-') ?> · besteld op <?= e(date('d-m-Y H:i', strtotime($order['besteld_op'] . ' UTC'))) ?></span>
+                        <span>
+                            <b class="status-badge <?= e($order['status']) ?>"><?= e(payment_status($order['status'])) ?></b>
+                            <?= $order['bedrag'] !== null ? format_price($order['bedrag']) : '' ?><?= $order['bank'] ? ' · ' . e($order['bank']) : '' ?>
+                        </span>
                     </div>
                     <div class="manage-actions">
                         <form method="post">

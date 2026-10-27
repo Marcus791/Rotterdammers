@@ -2,7 +2,7 @@
     <img src="<?= e($recipe['foto']) ?>" alt="<?= e($recipe['naam']) ?>">
     <div>
         <strong><?= e($recipe['naam']) ?></strong>
-        <span><?= e($recipe['thema']) ?> · <?= (int) $recipe['tijd'] ?> min · <?= format_price($recipe['prijs']) ?></span>
+        <span><?= e($recipe['thema']) ?> · <?= (int) $recipe['tijd'] ?> min · <?= format_price($recipe['prijs']) ?> p.p.</span>
     </div>
     <div class="manage-actions">
         <a class="button" href="admin.php?edit=<?= (int) $recipe['id'] ?>">Aanpassen</a>
